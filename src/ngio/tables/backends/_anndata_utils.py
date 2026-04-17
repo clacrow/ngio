@@ -15,6 +15,7 @@ from ngio.utils import (
     StoreOrGroup,
     open_group_wrapper,
 )
+from ngio.utils._zarr_utils import is_group_listable
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -46,6 +47,11 @@ def custom_anndata_read_zarr(
             "varp",
             "layers",
         ]
+
+    if not is_group_listable(group):
+        # If not listable we filter some elements
+        non_listable_elems = ["uns", "obsm", "varm", "obsp", "varp", "layers"]
+        elem_to_read = [elem for elem in elem_to_read if elem not in non_listable_elems]
 
     # Read with handling for backwards compat
     def callback(func: Callable, elem_name: str, elem: Any, iospec: Any) -> Any:

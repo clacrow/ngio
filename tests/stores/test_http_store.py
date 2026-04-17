@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from utils import (
     check_ome_zarr,
     create_sample_ome_zarr,
@@ -10,6 +11,7 @@ from utils import (
 )
 
 from ngio import open_ome_zarr_container
+from ngio.utils import NgioValueError
 
 HTTP_STORE_SUPPORTED_BACKENDS = ["anndata", "json", "csv", "parquet"]
 
@@ -44,8 +46,8 @@ def test_http_store_derive_to_s3_store(
         bucket_name=moto_s3_server["bucket_name"],
         zarr_path=random_zarr_path(),
     )
-    derived_ome_zarr = derive_image(ome_zarr, other_store=other_store)
-    check_ome_zarr(derived_ome_zarr, supported_backends=HTTP_STORE_SUPPORTED_BACKENDS)
+    with pytest.raises(NgioValueError, match="not listable"):
+        derive_image(ome_zarr, other_store=other_store)
 
 
 def test_http_store_derive_to_local_store(
@@ -61,8 +63,8 @@ def test_http_store_derive_to_local_store(
     ome_zarr = open_ome_zarr_container(store=http_mapper)
 
     other_store = tmp_path / "http_local_store_test" / random_zarr_path()
-    derived_ome_zarr = derive_image(ome_zarr, other_store=other_store)
-    check_ome_zarr(derived_ome_zarr, supported_backends=HTTP_STORE_SUPPORTED_BACKENDS)
+    with pytest.raises(NgioValueError, match="not listable"):
+        derive_image(ome_zarr, other_store=other_store)
 
 
 def test_http_store_derive_to_memory_store(http_static_server: dict) -> None:
@@ -76,5 +78,5 @@ def test_http_store_derive_to_memory_store(http_static_server: dict) -> None:
     ome_zarr = open_ome_zarr_container(store=http_mapper)
 
     other_store = {}
-    derived_ome_zarr = derive_image(ome_zarr, other_store=other_store)
-    check_ome_zarr(derived_ome_zarr, supported_backends=["anndata", "json"])
+    with pytest.raises(NgioValueError, match="not listable"):
+        derive_image(ome_zarr, other_store=other_store)

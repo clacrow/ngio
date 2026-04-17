@@ -3,11 +3,21 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
-from pathlib import Path
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import boto3
 import pytest
+
+
+class _NoListingHTTPHandler(SimpleHTTPRequestHandler):
+    def list_directory(self, path):
+        self.send_error(403, "Directory listing not allowed")
+        return None
+
+    def log_message(self, format, *args):
+        pass
 
 
 def _running_on_github_ci() -> bool:
@@ -111,50 +121,24 @@ def _find_free_port(host="127.0.0.1"):
 @pytest.fixture(scope="session")
 def http_static_server(tmp_path_factory):
     """
-    Serve a temporary directory via `python -m http.server`.
+    Serve a temporary directory via a non-listable HTTP server.
 
-    From the test code's perspective this is read-only: you write files
-    directly into `root` on disk, and then access them via HTTP.
+    Directory listing is disabled (403) to match production HTTP stores that
+    do not support listing. Individual file GETs work normally.
     """
+    root = tmp_path_factory.mktemp("http_static_root")
     host = "127.0.0.1"
     port = _find_free_port(host)
 
-    root = tmp_path_factory.mktemp("http_static_root")
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "http.server",
-        str(port),
-        "--bind",
-        host,
-    ]
-
-    env = os.environ.copy()
-    env["PYTHONUNBUFFERED"] = "1"
-
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(root),  # serve this directory
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        env=env,
+    server = ThreadingHTTPServer(
+        (host, port),
+        lambda *a, **kw: _NoListingHTTPHandler(*a, directory=str(root), **kw),
     )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
 
-    try:
-        _wait_for_port(proc, host, port, timeout=10)
-    except Exception as e:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        raise RuntimeError(f"Failed to start http server: {e}") from e
+    yield {"url": f"http://{host}:{port}", "root": root}
 
-    yield {"url": f"http://{host}:{port}", "root": Path(root)}
-
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
