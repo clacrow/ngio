@@ -166,6 +166,66 @@ def test_add_image(tmp_path: Path):
     assert test_plate.images_paths() == ["B/03/0", "C/03/1", "A/03/2", "A/notnumber/2"]
 
 
+@pytest.mark.parametrize("ngff_version", ["0.4", "0.5"])
+def test_well_inherits_plate_ngff_version_add_image(
+    tmp_path: Path, ngff_version: Literal["0.4", "0.5"]
+):
+    test_plate = create_empty_plate(
+        tmp_path / "test_plate.zarr", name="test_plate", ngff_version=ngff_version
+    )
+    assert test_plate.meta.version == ngff_version
+    test_plate.add_image(row="A", column="01", image_path="0")
+    well = test_plate.get_well("A", "01")
+    assert well.meta.version == ngff_version
+
+
+@pytest.mark.parametrize("ngff_version", ["0.4", "0.5"])
+def test_well_inherits_plate_ngff_version_derive_plate(
+    tmp_path: Path, ngff_version: Literal["0.4", "0.5"]
+):
+    test_plate = create_empty_plate(
+        tmp_path / "test_plate.zarr", name="test_plate", ngff_version=ngff_version
+    )
+    derived_test_plate = test_plate.derive_plate(tmp_path / "derived_test_plate.zarr")
+    assert derived_test_plate.meta.version == ngff_version
+    derived_test_plate.add_image(row="A", column="01", image_path="0")
+    well = derived_test_plate.get_well("A", "01")
+    assert well.meta.version == ngff_version
+
+
+@pytest.mark.parametrize("ngff_version", ["0.4", "0.5"])
+def test_well_plate_ngff_change_version_derive_plate(
+    tmp_path: Path, ngff_version: Literal["0.4", "0.5"]
+):
+    test_plate = create_empty_plate(
+        tmp_path / "test_plate.zarr", name="test_plate", ngff_version=ngff_version
+    )
+    target_version = "0.5" if ngff_version == "0.4" else "0.4"
+    derived_test_plate = test_plate.derive_plate(
+        tmp_path / "derived_test_plate.zarr", ngff_version=target_version
+    )
+    assert derived_test_plate.meta.version == target_version
+
+
+@pytest.mark.parametrize("ngff_version", ["0.4", "0.5"])
+def test_well_inherits_plate_ngff_version_create_with_images(
+    tmp_path: Path, ngff_version: Literal["0.4", "0.5"]
+):
+    images = [
+        ImageInWellPath(row="A", column="01", path="0"),
+    ]
+    test_plate = create_empty_plate(
+        tmp_path / "test_plate.zarr",
+        name="test_plate",
+        images=images,
+        ngff_version=ngff_version,
+    )
+
+    assert test_plate.meta.version == ngff_version
+    well = test_plate.get_well("A", "01")
+    assert well.meta.version == ngff_version
+
+
 def test_add_well_with_acquisition(tmp_path: Path):
     test_plate = create_empty_plate(tmp_path / "test_plate.zarr", name="test_plate")
     test_plate.add_acquisition(acquisition_id=0, acquisition_name="test_acquisition")
