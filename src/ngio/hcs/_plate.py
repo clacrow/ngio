@@ -584,9 +584,9 @@ class OmeZarrPlate:
             if len(attrs) == 0:
                 # Initialize the well metadata
                 # if the group is empty
-                well_meta = NgioWellMeta.default_init()
                 version = self.meta.plate.version
                 version = version if version is not None else "0.4"
+                well_meta = NgioWellMeta.default_init(ngff_version=version)
                 update_ngio_well_meta(group_handler, well_meta)
                 meta_handler = WellMetaHandler(group_handler=group_handler)
             else:
@@ -784,7 +784,7 @@ class OmeZarrPlate:
         store: StoreOrGroup,
         plate_name: str | None = None,
         version: NgffVersions | None = None,
-        ngff_version: NgffVersions = DefaultNgffVersion,
+        ngff_version: NgffVersions | None = None,
         keep_acquisitions: bool = False,
         cache: bool = False,
         overwrite: bool = False,
@@ -1266,7 +1266,7 @@ def derive_ome_zarr_plate(
     store: StoreOrGroup,
     plate_name: str | None = None,
     version: NgffVersions | None = None,
-    ngff_version: NgffVersions = DefaultNgffVersion,
+    ngff_version: NgffVersions | None = None,
     keep_acquisitions: bool = False,
     cache: bool = False,
     overwrite: bool = False,
@@ -1291,6 +1291,9 @@ def derive_ome_zarr_plate(
             stacklevel=2,
         )
         ngff_version = version
+
+    if ngff_version is None:
+        ngff_version = ome_zarr_plate.meta.plate.version or DefaultNgffVersion
 
     if plate_name is None:
         plate_name = ome_zarr_plate.meta.plate.name

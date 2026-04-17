@@ -443,7 +443,7 @@ def ngio_to_v05_well_meta(metadata: NgioWellMeta) -> dict:
     Returns:
         dict: The v05 well metadata.
     """
-    v05_well = WellAttrsV05(well=metadata.model_dump())  # type: ignore
+    v05_well = WellAttrsV05(well=metadata.model_dump(), version="0.5")
     v05_well = WellV05(ome=v05_well)
     return v05_well.model_dump(exclude_none=True, by_alias=True)
 
