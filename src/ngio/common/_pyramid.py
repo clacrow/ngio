@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import math
 from collections.abc import Callable, Mapping, Sequence
@@ -17,11 +19,12 @@ from ngio.common._zoom import (
 from ngio.utils import (
     NgioValueError,
 )
+from ngio.utils._zarr_utils import ArrayLike
 
 
 def _on_disk_numpy_zoom(
-    source: zarr.Array,
-    target: zarr.Array,
+    source: ArrayLike,
+    target: ArrayLike,
     order: InterpolationOrder,
 ) -> None:
     source_array = source[...]
@@ -30,47 +33,53 @@ def _on_disk_numpy_zoom(
     target[...] = numpy_zoom(source_array, target_shape=target.shape, order=order)
 
 
+def _da_from_array(array: ArrayLike) -> da.Array:
+    """Create a dask array from a zarr or TensorStore array."""
+    if isinstance(array, zarr.Array):
+        return da.from_zarr(array)
+    return da.from_array(
+        array, chunks=array.chunks, meta=np.empty((), dtype=array.dtype)
+    )
+
+
+def _da_to_array(dask_array: da.Array, target: ArrayLike) -> None:
+    """Write a dask array to a zarr or TensorStore array."""
+    if isinstance(target, zarr.Array):
+        dask_array.to_zarr(target)
+    else:
+        target[...] = dask_array.compute()
+
+
 def _on_disk_dask_zoom(
-    source: zarr.Array,
-    target: zarr.Array,
+    source: ArrayLike,
+    target: ArrayLike,
     order: InterpolationOrder,
 ) -> None:
-    source_array = da.from_zarr(source)
+    source_array = _da_from_array(source)
     target_array = dask_zoom(source_array, target_shape=target.shape, order=order)
-
-    # This is a potential fix for Dask 2025.11
-    # import dask.config
-    # chunk_size_bytes = np.prod(target.chunks) * target_array.dtype.itemsize
-    # current_chunk_size = dask.config.get("array.chunk-size")
-    # Increase the chunk size to avoid dask potentially creating
-    # corrupted chunks when writing chunks that are not multiple of the
-    # target chunk size
-    # dask.config.set({"array.chunk-size": f"{chunk_size_bytes}B"})
     target_array = target_array.rechunk(target.chunks)
     target_array = target_array.compute_chunk_sizes()
-    target_array.to_zarr(target)
-    # Restore previous chunk size
-    # dask.config.set({"array.chunk-size": current_chunk_size})
+    _da_to_array(target_array, target)
 
 
 def _on_disk_coarsen(
-    source: zarr.Array,
-    target: zarr.Array,
+    source: ArrayLike,
+    target: ArrayLike,
     order: InterpolationOrder = "linear",
     aggregation_function: Callable | None = None,
 ) -> None:
     """Apply a coarsening operation from a source zarr array to a target zarr array.
 
     Args:
-        source (zarr.Array): The source array to coarsen.
-        target (zarr.Array): The target array to save the coarsened result to.
+        source (ArrayLike): The source array to coarsen.
+        target (ArrayLike): The target array to save the coarsened result to.
         order (InterpolationOrder): The order of interpolation is not really implemented
             for coarsening, but it is kept for compatibility with the zoom function.
             order="linear" -> linear interpolation ~ np.mean
             order="nearest" -> nearest interpolation ~ np.max
         aggregation_function (np.ufunc): The aggregation function to use.
     """
-    source_array = da.from_zarr(source)
+    source_array = _da_from_array(source)
 
     _scale, _target_shape = _zoom_inputs_check(
         source_array=source_array, scale=None, target_shape=target.shape
@@ -100,28 +109,23 @@ def _on_disk_coarsen(
         aggregation_function, source_array, coarsening_setup, trim_excess=True
     )
     out_target = out_target.rechunk(target.chunks)
-    out_target.to_zarr(target)
+    _da_to_array(out_target, target)
 
 
 def on_disk_zoom(
-    source: zarr.Array,
-    target: zarr.Array,
+    source: ArrayLike,
+    target: ArrayLike,
     order: InterpolationOrder = "linear",
     mode: Literal["dask", "numpy", "coarsen"] = "dask",
 ) -> None:
     """Apply a zoom operation from a source zarr array to a target zarr array.
 
     Args:
-        source (zarr.Array): The source array to zoom.
-        target (zarr.Array): The target array to save the zoomed result to.
+        source (ArrayLike): The source array to zoom.
+        target (ArrayLike): The target array to save the zoomed result to.
         order (InterpolationOrder): The order of interpolation. Defaults to "linear".
         mode (Literal["dask", "numpy", "coarsen"]): The mode to use. Defaults to "dask".
     """
-    if not isinstance(source, zarr.Array):
-        raise NgioValueError("source must be a zarr array")
-
-    if not isinstance(target, zarr.Array):
-        raise NgioValueError("target must be a zarr array")
 
     if source.dtype != target.dtype:
         raise NgioValueError("source and target must have the same dtype")
@@ -141,7 +145,7 @@ def on_disk_zoom(
 
 
 def _find_closest_arrays(
-    processed: list[zarr.Array], to_be_processed: list[zarr.Array]
+    processed: list[ArrayLike], to_be_processed: list[ArrayLike]
 ) -> tuple[np.intp, np.intp]:
     dist_matrix = np.zeros((len(processed), len(to_be_processed)))
     for i, arr_to_proc in enumerate(to_be_processed):
@@ -163,8 +167,8 @@ def _find_closest_arrays(
 
 
 def consolidate_pyramid(
-    source: zarr.Array,
-    targets: list[zarr.Array],
+    source: ArrayLike,
+    targets: list[ArrayLike],
     order: InterpolationOrder = "linear",
     mode: Literal["dask", "numpy", "coarsen"] = "dask",
 ) -> None:

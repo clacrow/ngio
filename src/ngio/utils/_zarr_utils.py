@@ -1,10 +1,12 @@
 """Common utilities for working with Zarr groups in consistent ways."""
 
+from __future__ import annotations
+
 import json
 import logging
 import warnings
 from pathlib import Path
-from typing import Literal, TypeAlias
+from typing import TYPE_CHECKING, Literal, TypeAlias, Union
 
 import dask.array as da
 import fsspec
@@ -24,7 +26,12 @@ from ngio.utils._errors import (
 )
 from ngio.utils._warnings import NgioUserWarning
 
+if TYPE_CHECKING:
+    from ngio.backends._tensorstore_array import TensorStoreArray
+
 logger = logging.getLogger(f"ngio:{__name__}")
+
+ArrayLike: TypeAlias = Union[zarr.Array, "TensorStoreArray"]
 
 AccessModeLiteral = Literal["r", "r+", "w", "w-", "a"]
 # StoreLike is more restrictive than it could be
@@ -324,19 +331,49 @@ class ZarrGroupHandler:
         self._group_cache.set(path, group, overwrite=overwrite)
         return group
 
-    def get_array(self, path: str) -> zarr.Array:
+    def get_array(self, path: str) -> ArrayLike:
         """Get an array from the group."""
         array = self._array_cache.get(path)
         if isinstance(array, zarr.Array):
-            return array
+            return self._maybe_wrap_tensorstore(array, path)
         array = self.group.get(path, default=None)
         if isinstance(array, zarr.Array):
             self._array_cache.set(path, array)
-            return array
+            return self._maybe_wrap_tensorstore(array, path)
 
         if isinstance(array, zarr.Group):
             raise NgioValueError(f"The object at {path} is not an array, but a group.")
         raise NgioFileNotFoundError(f"No array found at {path}")
+
+    def _maybe_wrap_tensorstore(
+        self, zarr_array: zarr.Array, path: str
+    ) -> ArrayLike:
+        """Wrap a zarr array with TensorStoreArray if the backend is configured."""
+        from ngio.backends._config import get_backend, _config
+
+        if get_backend() != "tensorstore":
+            return zarr_array
+
+        from ngio.backends._spec_builder import build_tensorstore_spec
+        from ngio.backends._tensorstore_array import TensorStoreArray
+
+        spec = build_tensorstore_spec(
+            store=self.store,
+            group_path=self._group.path,
+            array_path=path,
+            zarr_format=self.zarr_format,
+        )
+        if spec is None:
+            return zarr_array
+
+        ts_array = TensorStoreArray.open(
+            spec=spec,
+            concurrency=_config.tensorstore_concurrency,
+            zarr_array_ref=zarr_array,
+        )
+        if ts_array is None:
+            return zarr_array
+        return ts_array
 
     def get_handler(
         self,
@@ -389,15 +426,23 @@ class ZarrGroupHandler:
         copy_group(self.group, dest_group)
 
 
-def find_dimension_separator(array: zarr.Array) -> Literal[".", "/"]:
+def find_dimension_separator(array: ArrayLike) -> Literal[".", "/"]:
     """Find the dimension separator used in the Zarr store.
 
     Args:
-        array (zarr.Array): The Zarr array to check.
+        array (ArrayLike): The Zarr or TensorStore array to check.
 
     Returns:
         Literal[".", "/"]: The dimension separator used in the store.
     """
+    from ngio.backends._tensorstore_array import TensorStoreArray
+
+    if isinstance(array, TensorStoreArray):
+        if array._zarr_array_ref is not None:
+            array = array._zarr_array_ref
+        else:
+            return "/"
+
     from zarr.core.chunk_key_encodings import DefaultChunkKeyEncoding
 
     if array.metadata.zarr_format == 2:

@@ -1,5 +1,7 @@
 """Generic class to handle Image-like data in a OME-NGFF file."""
 
+from __future__ import annotations
+
 import logging
 import warnings
 from abc import ABC, abstractmethod
@@ -10,6 +12,8 @@ import dask.array as da
 import numpy as np
 import zarr
 from zarr.core.array import CompressorLike
+
+from ngio.utils._zarr_utils import ArrayLike
 
 from ngio.common import (
     Dimensions,
@@ -158,7 +162,7 @@ class AbstractImage(ABC):
         return self.dimensions.axes
 
     @property
-    def zarr_array(self) -> zarr.Array:
+    def zarr_array(self) -> ArrayLike:
         """Return the Zarr array."""
         return self._zarr_array
 

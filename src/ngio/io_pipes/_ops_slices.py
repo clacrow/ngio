@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import math
 import warnings
@@ -8,6 +10,8 @@ import dask.array as da
 import numpy as np
 import zarr
 from pydantic import BaseModel, ConfigDict
+
+from ngio.utils._zarr_utils import ArrayLike
 
 from ngio.common._dimensions import Dimensions
 from ngio.io_pipes._ops_slices_utils import compute_slice_chunks
@@ -163,17 +167,22 @@ def _check_list_in_slicing_tuple(
 ##############################################################
 
 
-def get_slice_as_numpy(zarr_array: zarr.Array, slicing_ops: SlicingOps) -> np.ndarray:
+def get_slice_as_numpy(zarr_array: ArrayLike, slicing_ops: SlicingOps) -> np.ndarray:
     """Get a slice of a zarr array as a numpy array."""
     slicing_tuple = slicing_ops.normalized_slicing_tuple
-    # Find if the is any tuple in the slicing tuple
-    # If there is one we need to handle it differently
     return zarr_array[slicing_tuple]
 
 
-def get_slice_as_dask(zarr_array: zarr.Array, slicing_ops: SlicingOps) -> da.Array:
+def get_slice_as_dask(zarr_array: ArrayLike, slicing_ops: SlicingOps) -> da.Array:
     """Get a slice of a zarr array as a dask array."""
-    da_array = da.from_zarr(zarr_array)
+    if isinstance(zarr_array, zarr.Array):
+        da_array = da.from_zarr(zarr_array)
+    else:
+        da_array = da.from_array(
+            zarr_array,
+            chunks=zarr_array.chunks,
+            meta=np.empty((), dtype=zarr_array.dtype),
+        )
     slicing_tuple = slicing_ops.normalized_slicing_tuple
     return da_array[slicing_tuple]
 
@@ -216,7 +225,7 @@ def _check_compatibility_of_shapes(
 
 
 def set_slice_as_numpy(
-    zarr_array: zarr.Array,
+    zarr_array: ArrayLike,
     patch: np.ndarray,
     slicing_ops: SlicingOps,
 ) -> None:
@@ -242,25 +251,29 @@ def handle_int_set_as_dask(
 
 
 def set_slice_as_dask(
-    zarr_array: zarr.Array, patch: da.Array, slicing_ops: SlicingOps
+    zarr_array: ArrayLike, patch: da.Array, slicing_ops: SlicingOps
 ) -> None:
     slice_tuple = slicing_ops.normalized_slicing_tuple
     _check_compatibility_of_shapes(zarr_array.shape, patch.shape, slice_tuple)
     ax, first_tuple = _check_list_in_slicing_tuple(slice_tuple)
     patch, slice_tuple = handle_int_set_as_dask(patch, slice_tuple)
-    if ax is None:
-        # Base case, no tuple in the slicing tuple
-        # assert False
-        da.to_zarr(arr=patch, url=zarr_array, region=slice_tuple)
-        return
 
-    # Complex case, we have exactly one tuple in the slicing tuple
-    assert first_tuple is not None
-    for i, idx in enumerate(first_tuple):
-        _sub_slice = (*slice_tuple[:ax], slice(idx, idx + 1), *slice_tuple[ax + 1 :])
-        sub_patch = da.take(patch, indices=i, axis=ax)
-        sub_patch = da.expand_dims(sub_patch, axis=ax)
-        da.to_zarr(arr=sub_patch, url=zarr_array, region=_sub_slice)
+    if isinstance(zarr_array, zarr.Array):
+        if ax is None:
+            da.to_zarr(arr=patch, url=zarr_array, region=slice_tuple)
+            return
+        assert first_tuple is not None
+        for i, idx in enumerate(first_tuple):
+            _sub_slice = (
+                *slice_tuple[:ax],
+                slice(idx, idx + 1),
+                *slice_tuple[ax + 1 :],
+            )
+            sub_patch = da.take(patch, indices=i, axis=ax)
+            sub_patch = da.expand_dims(sub_patch, axis=ax)
+            da.to_zarr(arr=sub_patch, url=zarr_array, region=_sub_slice)
+    else:
+        zarr_array[slice_tuple] = patch.compute()
 
 
 ##############################################################

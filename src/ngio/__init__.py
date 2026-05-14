@@ -9,6 +9,7 @@ except PackageNotFoundError:  # pragma: no cover
 __author__ = "Lorenzo Cerrone"
 __email__ = "lorenzo.cerrone@uzh.ch"
 
+from ngio.backends import get_backend, set_backend, set_tensorstore_concurrency
 from ngio.common import Dimensions, Roi, RoiSlice
 from ngio.hcs import (
     OmeZarrPlate,
@@ -61,9 +62,12 @@ __all__ = [
     "create_empty_well",
     "create_ome_zarr_from_array",
     "create_synthetic_ome_zarr",
+    "get_backend",
     "open_image",
     "open_label",
     "open_ome_zarr_container",
     "open_ome_zarr_plate",
     "open_ome_zarr_well",
+    "set_backend",
+    "set_tensorstore_concurrency",
 ]

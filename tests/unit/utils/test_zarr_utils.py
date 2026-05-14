@@ -100,7 +100,8 @@ def test_group_handler_read(tmp_path: Path):
     handler = ZarrGroupHandler(store=store, cache=True, mode="r")
 
     assert handler.load_attrs() == input_attrs
-    assert isinstance(handler.get_array("array1"), zarr.Array)
+    array = handler.get_array("array1")
+    assert hasattr(array, "shape") and array.shape == (10, 10)
     assert isinstance(handler.get_group("group1"), zarr.Group)
     assert handler.read_only
 

@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 from collections.abc import Sequence
 from typing import Protocol, TypeVar
-
-import zarr
 
 from ngio.common._roi import Roi
 from ngio.io_pipes._ops_axes import AxesOps
 from ngio.io_pipes._ops_slices import SlicingOps
 from ngio.io_pipes._ops_transforms import TransformProtocol
+from ngio.utils._zarr_utils import ArrayLike
 
 GetterDataType = TypeVar("GetterDataType", covariant=True)
 SetterDataType = TypeVar("SetterDataType", contravariant=True)
@@ -14,7 +15,7 @@ SetterDataType = TypeVar("SetterDataType", contravariant=True)
 
 class DataGetterProtocol(Protocol[GetterDataType]):
     @property
-    def zarr_array(self) -> zarr.Array: ...
+    def zarr_array(self) -> ArrayLike: ...
 
     @property
     def slicing_ops(self) -> SlicingOps: ...
@@ -36,7 +37,7 @@ class DataGetterProtocol(Protocol[GetterDataType]):
 
 class DataSetterProtocol(Protocol[SetterDataType]):
     @property
-    def zarr_array(self) -> zarr.Array: ...
+    def zarr_array(self) -> ArrayLike: ...
 
     @property
     def slicing_ops(self) -> SlicingOps: ...

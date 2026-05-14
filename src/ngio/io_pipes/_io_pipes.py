@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Generic, TypeVar
 
 import numpy as np
-import zarr
 from dask.array import Array as DaskArray
+
+from ngio.utils._zarr_utils import ArrayLike
 
 from ngio.common._dimensions import Dimensions
 from ngio.common._roi import Roi
@@ -68,7 +71,7 @@ T = TypeVar("T")
 class DataGetter(ABC, Generic[T]):
     def __init__(
         self,
-        zarr_array: zarr.Array,
+        zarr_array: ArrayLike,
         slicing_ops: SlicingOps,
         axes_ops: AxesOps,
         transforms: Sequence[TransformProtocol] | None = None,
@@ -90,7 +93,7 @@ class DataGetter(ABC, Generic[T]):
         )
 
     @property
-    def zarr_array(self) -> zarr.Array:
+    def zarr_array(self) -> ArrayLike:
         return self._zarr_array
 
     @property
@@ -123,7 +126,7 @@ class DataGetter(ABC, Generic[T]):
 class DataSetter(ABC, Generic[T]):
     def __init__(
         self,
-        zarr_array: zarr.Array,
+        zarr_array: ArrayLike,
         slicing_ops: SlicingOps,
         axes_ops: AxesOps,
         transforms: Sequence[TransformProtocol] | None = None,
@@ -145,7 +148,7 @@ class DataSetter(ABC, Generic[T]):
         )
 
     @property
-    def zarr_array(self) -> zarr.Array:
+    def zarr_array(self) -> ArrayLike:
         return self._zarr_array
 
     @property
@@ -179,7 +182,7 @@ class NumpyGetter(DataGetter[np.ndarray]):
     def __init__(
         self,
         *,
-        zarr_array: zarr.Array,
+        zarr_array: ArrayLike,
         dimensions: Dimensions,
         axes_order: Sequence[str] | None = None,
         transforms: Sequence[TransformProtocol] | None = None,
@@ -219,7 +222,7 @@ class DaskGetter(DataGetter[DaskArray]):
     def __init__(
         self,
         *,
-        zarr_array: zarr.Array,
+        zarr_array: ArrayLike,
         dimensions: Dimensions,
         axes_order: Sequence[str] | None = None,
         transforms: Sequence[TransformProtocol] | None = None,
@@ -273,7 +276,7 @@ class NumpySetter(DataSetter[np.ndarray]):
     def __init__(
         self,
         *,
-        zarr_array: zarr.Array,
+        zarr_array: ArrayLike,
         dimensions: Dimensions,
         axes_order: Sequence[str] | None = None,
         transforms: Sequence[TransformProtocol] | None = None,
@@ -319,7 +322,7 @@ class DaskSetter(DataSetter[DaskArray]):
     def __init__(
         self,
         *,
-        zarr_array: zarr.Array,
+        zarr_array: ArrayLike,
         dimensions: Dimensions,
         axes_order: Sequence[str] | None = None,
         transforms: Sequence[TransformProtocol] | None = None,
