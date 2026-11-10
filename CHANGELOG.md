@@ -5,6 +5,7 @@
 ### Features
 
 - Add `set_config()` (exported from `ngio` and `ngio.config`) to replace the global `NgioConfig` from code at any time. It replaces the previous configuration (a zarr setting forwarded earlier stays unless the new config sets it) and immediately applies the `s3fs` retry markers and the `zarr` section, so libraries can configure ngio without setting `NGIO_CONFIG_PATH` before `import ngio`.
+- Add an optional TensorStore backend for array I/O (`pip install ngio[tensorstore]`, enabled with `tensorstore.enabled` in the config). Reads, writes and pyramid consolidation move chunk data through TensorStore on local and S3/GCS stores; metadata stays on zarr and `zarr_array` is still a `zarr.Array`. Unsupported stores fall back to zarr with a one-time warning. See the configuration guide.
 
 ## [v1.1.3]
 

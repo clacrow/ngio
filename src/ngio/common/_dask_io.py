@@ -10,6 +10,7 @@ import zarr
 from dask.array.core import normalize_chunks
 from dask.utils import parse_bytes
 
+from ngio.backends._io import io_array
 from ngio.config import get_config
 from ngio.utils import NgioValueError
 
@@ -205,7 +206,9 @@ def store_dask(
     _require_write_unit_alignment(grid, slices, zarr_array)
     da.store(
         patch.rechunk(grid),
-        zarr_array,  # ty: ignore[invalid-argument-type]  # dask's stub omits zarr
+        # The grid above is zarr's write unit either way; only the object
+        # receiving each block's `__setitem__` depends on the backend.
+        io_array(zarr_array),  # ty: ignore[invalid-argument-type]  # dask's stub omits zarr
         regions=[slices],
         lock=False,
     )

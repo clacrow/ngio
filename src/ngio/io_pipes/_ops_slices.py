@@ -9,6 +9,7 @@ import numpy as np
 import zarr
 from pydantic import BaseModel, ConfigDict
 
+from ngio.backends._io import as_dask, io_array
 from ngio.common._dask_io import store_dask
 from ngio.common._dimensions import Dimensions
 from ngio.io_pipes._ops_slices_utils import compute_slice_chunks
@@ -170,7 +171,7 @@ def get_slice_as_numpy(zarr_array: zarr.Array, slicing_ops: SlicingOps) -> np.nd
     # Find if the is any tuple in the slicing tuple
     # If there is one we need to handle it differently
     # zarr's __getitem__ stub does not model list-of-int fancy indexing.
-    return zarr_array[slicing_tuple]  # type: ignore
+    return io_array(zarr_array)[slicing_tuple]  # type: ignore
 
 
 def get_slice_as_dask(zarr_array: zarr.Array, slicing_ops: SlicingOps) -> da.Array:
@@ -183,7 +184,7 @@ def get_slice_as_dask(zarr_array: zarr.Array, slicing_ops: SlicingOps) -> da.Arr
     # shard reads fetch only what the ROI covers. Coarser blocks only win
     # when the read spans whole shards, which is the pyramid's case, not
     # this one.
-    da_array = da.from_zarr(zarr_array)
+    da_array = as_dask(zarr_array)
     slicing_tuple = slicing_ops.normalized_slicing_tuple
     return da_array[slicing_tuple]
 
@@ -233,7 +234,7 @@ def set_slice_as_numpy(
     slice_tuple = slicing_ops.normalized_slicing_tuple
     _check_compatibility_of_shapes(zarr_array.shape, patch.shape, slice_tuple)
     # zarr's __setitem__ stub does not model list-of-int fancy indexing.
-    zarr_array[slice_tuple] = patch  # type: ignore
+    io_array(zarr_array)[slice_tuple] = patch  # type: ignore
 
 
 def handle_int_set_as_dask(

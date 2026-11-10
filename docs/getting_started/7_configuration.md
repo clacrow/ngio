@@ -139,6 +139,29 @@ Two knobs ngio forwards into zarr's own runtime configuration. Both default to `
 - **`async_concurrency` is read by zarr on every call**, so changing it at runtime works: set it directly with `zarr.config.set({"async.concurrency": 64})` (also usable as a context manager for a single operation).
 - **`threading_max_workers` is snapshotted by zarr into a process-global executor at the first zarr operation.** ngio applies this section during `import ngio` for exactly that reason; changing it afterwards has no effect for the life of the process, so it must come from the config file (or a `set_config()` call made before any zarr operation).
 
+## TensorStore backend (`tensorstore`)
+
+ngio can read and write array data through [TensorStore](https://google.github.io/tensorstore/) instead of zarr-python. Install the extra (`pip install ngio[tensorstore]`) and enable it:
+
+```json
+{
+    "tensorstore": {
+        "enabled": true,
+        "request_concurrency": 64
+    }
+}
+```
+
+Only the data path changes: `get_as_numpy`, `get_as_dask`, `set_array` and pyramid consolidation move chunks through TensorStore, while metadata, array creation and copies stay on zarr, and `image.zarr_array` is still a `zarr.Array`. Data written either way is the same on disk. Enabling it without the package installed is a configuration error.
+
+TensorStore opens local stores and S3/GCS stores. Anything else keeps using zarr, with a one-time `NgioUserWarning` naming the reason: in-memory and zip stores, HTTP, and S3 filesystems given an explicit `key`/`secret` — TensorStore only takes credentials from a provider (environment, profile, instance metadata), so ngio does not guess. Anonymous access and `profile=` are carried over.
+
+- `data_copy_concurrency`: threads TensorStore uses to encode and decode chunks (its default is one per core).
+- `file_io_concurrency`: local file operations in flight.
+- `request_concurrency`: S3/GCS requests in flight — the remote-store knob, like `zarr.async_concurrency`.
+
+All three default to `null`, which keeps TensorStore's own defaults. TensorStore retries remote requests with its own policy; `io_retry` does not apply to it.
+
 ## Next steps
 
 - [Quickstart](0_quickstart.md) — if you have not opened a container yet.

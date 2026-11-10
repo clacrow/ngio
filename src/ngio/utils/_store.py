@@ -242,6 +242,17 @@ class NgioStore(WrapperStore[Store]):
         return None
 
     @property
+    def fsspec_fs(self) -> fsspec.AbstractFileSystem | None:
+        """Return the (async) fsspec filesystem of an fsspec store, else `None`.
+
+        The filesystem itself, not a synchronous copy (see `sync_fs_and_path`):
+        meant for reading its configuration — protocol, endpoint, credentials.
+        """
+        if isinstance(self._store, FsspecStore):
+            return self._store.fs
+        return None
+
+    @property
     def memory_dict(self) -> MutableMapping[str, Any]:
         """Return the backing dict of an in-memory store.
 

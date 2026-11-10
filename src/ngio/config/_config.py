@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import random
@@ -174,11 +175,55 @@ class ZarrConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
 
+class TensorStoreConfig(BaseModel):
+    """The optional TensorStore array backend; see the configuration guide.
+
+    When `enabled`, ngio reads and writes array *data* through TensorStore
+    instead of zarr-python. Metadata, array creation and copies stay on zarr.
+    Arrays on stores TensorStore cannot open (in-memory, zip, ...) keep using
+    zarr, with a one-time warning. The concurrency fields default to `None`,
+    which keeps TensorStore's own defaults.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Route array reads and writes through TensorStore. "
+        "Requires the `tensorstore` extra.",
+    )
+    data_copy_concurrency: int | None = Field(
+        default=None,
+        ge=1,
+        description="Threads TensorStore uses to encode and decode chunks "
+        "(its default is one per core).",
+    )
+    file_io_concurrency: int | None = Field(
+        default=None,
+        ge=1,
+        description="Local file operations TensorStore keeps in flight.",
+    )
+    request_concurrency: int | None = Field(
+        default=None,
+        ge=1,
+        description="S3/GCS requests TensorStore keeps in flight — the knob "
+        "that matters on remote stores.",
+    )
+    model_config = ConfigDict(validate_assignment=True)
+
+    @model_validator(mode="after")
+    def _check_installed(self) -> "TensorStoreConfig":
+        if self.enabled and importlib.util.find_spec("tensorstore") is None:
+            raise ValueError(
+                "tensorstore.enabled requires the tensorstore package: "
+                "install it with `pip install ngio[tensorstore]`."
+            )
+        return self
+
+
 class NgioConfig(BaseModel):
     """Global configuration for ngio, one section per subsystem.
 
     Sections: `s3fs` (S3 credentials/endpoint), `io_retry` (transient-error
-    retries), `consolidation`, `dask`, and `zarr`. Loaded from the config
+    retries), `consolidation`, `dask`, `zarr`, and `tensorstore`. Loaded from the config
     file at import and replaceable with `set_config`; see the configuration
     guide.
     """
@@ -188,6 +233,7 @@ class NgioConfig(BaseModel):
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
     dask: DaskConfig = Field(default_factory=DaskConfig)
     zarr: ZarrConfig = Field(default_factory=ZarrConfig)
+    tensorstore: TensorStoreConfig = Field(default_factory=TensorStoreConfig)
     model_config = ConfigDict(validate_assignment=True)
 
 

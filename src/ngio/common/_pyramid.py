@@ -9,6 +9,7 @@ import numpy as np
 import zarr
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ngio.backends._io import as_dask
 from ngio.common._dask_io import RegionType, store_dask
 from ngio.common._zoom import (
     InterpolationOrder,
@@ -162,8 +163,8 @@ def _read_source_dask(source: zarr.Array) -> da.Array:
     the plain path, expression unchanged.
     """
     if source.shards is None:
-        return da.from_zarr(source)
-    return da.from_zarr(source, chunks=source.shards).rechunk(source.chunks)
+        return as_dask(source)
+    return as_dask(source, chunks=source.shards).rechunk(source.chunks)
 
 
 def _on_disk_dask_zoom(
